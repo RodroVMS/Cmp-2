@@ -1,8 +1,10 @@
-from pycompiler import Grammar, Item
-from utils import ContainerSet
-from grammar import compute_firsts, compute_local_firsts
-from automata03 import State, multiline_formatter
-from shift_reduce import ShiftReduceParser
+from cmp.pycompiler import Grammar, Item
+from cmp.utils import ContainerSet
+from cmp.tools.shift_reduce_parser import ShiftReduceParser
+
+from cmp.tools.Old.grammar import compute_firsts, compute_local_firsts
+from cmp.tools.Old.automata03 import State, multiline_formatter
+
 
 
 ##firsts = compute_firsts(G)
@@ -10,11 +12,11 @@ from shift_reduce import ShiftReduceParser
 
 def expand(item, firsts):
     next_symbol = item.NextSymbol
+ 
     if next_symbol is None or next_symbol.IsTerminal:
         return []
     
     lookaheads = ContainerSet()
-    # Your code here!!! (Compute lookahead for child items)
     result = []
     for preview in item.Preview():
         lookaheads.update(compute_local_firsts(firsts, preview))
@@ -54,8 +56,13 @@ def closure_lr1(items, firsts):
 
 def goto_lr1(items, symbol, firsts=None, just_kernel=False):
     assert just_kernel or firsts is not None, '`firsts` must be provided if `just_kernel=False`'
-    items = frozenset(item.NextItem for item in items if item.NextSymbol == symbol)
-    return items if just_kernel else closure_lr1(items, firsts)
+    #items = frozenset(item.NextItem for item in items if item.NextSymbol == symbol)
+    xlist = []
+    for item in items:
+        if item.NextSymbol == symbol:
+            nextItem = item.NextItem()
+            xlist.append(nextItem)
+    return frozenset(xlist) if just_kernel else closure_lr1(items, firsts)
 
 def build_LR1_automaton(G):
     assert len(G.startSymbol.productions) == 1, 'Grammar must be augmented'
@@ -77,10 +84,10 @@ def build_LR1_automaton(G):
         current = pending.pop()
         current_state = visited[current]
         
+        closure = closure_lr1(current, firsts)
         for symbol in G.terminals + G.nonTerminals:
             # Your code here!!! (Get/Build `next_state`)
-            closure2 = closure_lr1(current, firsts)
-            goto = goto_lr1(closure2, symbol, just_kernel = True)
+            goto = goto_lr1(closure, symbol, just_kernel = True)
             
             if not goto:
                 continue
@@ -111,9 +118,6 @@ class LR1Parser(ShiftReduceParser):
         for node in automaton:
             idx = node.idx
             for item in node.state:
-                # Your code here!!!
-                # - Fill `self.Action` and `self.Goto` according to `item`)
-                # - Feel free to use `self._register(...)`)
                 if item.IsReduceItem:
                     production = item.production
                     if production.Left == G.startSymbol and G.EOF in item.lookaheads:

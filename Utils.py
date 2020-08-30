@@ -5,7 +5,7 @@ from AST import AtomicNode,CallNode,InstantiateNode
 class FormatVisitor(object):
     @visitor.on('node')
     def visit(self, node, tabs):
-        return
+        pass
     
     @visitor.when(ProgramNode)
     def visit(self, node, tabs=0):

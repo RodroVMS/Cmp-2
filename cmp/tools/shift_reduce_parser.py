@@ -16,7 +16,8 @@ class ShiftReduceParser:
     def __call__(self, w):
         stack = [ 0 ] #S 
         cursor = 0
-        output = []   
+        output = []
+        operations = []
         
         while True:
             state = stack[-1]
@@ -26,9 +27,11 @@ class ShiftReduceParser:
             try:
                 action, tag = self.action[state, lookahead]
                 if action == self.SHIFT:
+                    operations.append("SHIFT")
                     stack.append(tag)
                     cursor += 1
                 elif action == self.REDUCE:
+                    operations.append("REDUCE")
                     l = len(tag.Right)
                     while l > 0:
                         stack.pop()
@@ -37,11 +40,11 @@ class ShiftReduceParser:
                     last = stack[-1]
                     stack.append(self.goto[last, tag.Left])
                 elif action == self.OK:
-                    return output, True
+                    return output, operations
                 else:
-                    return "Error! Action Table Conflict", False
+                    return "Error! Action Table Conflict", operations
             except KeyError:
-                return f"Error! String {w} does not match Grammars generated language.", False
+                return f"Error! String {w} does not match Grammars generated language.", operations
 
     @staticmethod
     def _register(table, key, value, conflict_type: dict):
