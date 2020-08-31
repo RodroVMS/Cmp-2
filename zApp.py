@@ -1,6 +1,9 @@
 import streamlit as st
 import os
 import cmp.visitor as visitor
+from TypeCollectorBuilder import TypeBuilder, TypeCollector
+from TypeChecker import TypeChecker
+
 from Grammar import G, tokenize_text, ocur, ccur, semi
 from Utils import FormatVisitor
 from cmp.evaluation import evaluate_reverse_parse
@@ -29,24 +32,6 @@ def pprint_tokens(tokens):
     s += (' '.join([str(t.token_type) for t in pending]))
     return s
 
-def run_pipeline(G, program):
-    st.write("Executing Program", local_name)
-    st.text(program)
-    
-    tokens = tokenize_text(program)
-    st.text(pprint_tokens(tokens))
-    
-    parser = LR1Parser(G)
-    parse, operations = parser([t.token_type for t in tokens])
-    print("\n".join(repr(x) for x in parse))
-
-    ast = evaluate_reverse_parse(parse, operations, tokens)
-    formatter = FormatVisitor()
-    tree = formatter.visit(ast)
-    print(tree)
-    return ast
-
-
 st.title("Cool Language")
 
 sb = st.selectbox("Choose where the file is going to be loaded or written:", ["Import File", "Raw Input"],)
@@ -57,6 +42,8 @@ showProgram = st.sidebar.checkbox("Show Program", False)
 showTokens = st.sidebar.checkbox("Show Tokenization", False)
 showParsing = st.sidebar.checkbox("Show Parsing")
 showAST = st.sidebar.checkbox("Show AST")
+showTypesCollected = st.sidebar.checkbox("Show Types Collected")
+showTypesBuilded = st.sidebar.checkbox("Show Types Builded")
 
 local_name = ""
 
@@ -97,4 +84,35 @@ if st.button("Submit"):
     if showAST:
         st.write("Building AST")
         st.text(tree)
-
+    
+    errors = []
+    collector = TypeCollector(errors)
+    collector.visit(ast)
+    context = collector.context
+    if errors == []:
+        st.success("Collecting Types")
+    else: 
+        st.error("Collecting Types")
+    if showTypesCollected:
+        st.text("Context:")
+        st.text(context)
+    
+    builder = TypeBuilder(context, errors)
+    builder.visit(ast)
+    if errors == []:
+        st.success("Building Types")
+    else:
+        st.error("Building Types")
+    if showTypesBuilded:
+        st.text("Context")
+        st.text(context)
+    
+    checker = TypeChecker(context, errors)
+    scope = checker.visit(ast)
+    if errors == []:
+        st.success("Checking Types")
+    else:
+        st.error("Checking Types")
+    
+    st.text("Errors")
+    st.text(errors)
