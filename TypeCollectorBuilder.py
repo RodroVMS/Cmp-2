@@ -102,7 +102,7 @@ class TypeBuilder:
             try:
                 params_type.append(self.context.get_type(p_type))
             except SemanticError as err:
-                params_type.append(TypeError)
+                params_type.append(ErrorType())
                 self.errors.append(err.text)
             params_name.append(p_name)
             

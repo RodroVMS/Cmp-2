@@ -192,6 +192,7 @@ class Scope:
 
     def create_child(self):
         child = Scope(self)
+        child.locals = self.locals.copy()
         self.children.append(child)
         return child
 

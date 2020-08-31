@@ -1,5 +1,9 @@
 import os
-import cmp.visitor as visitor 
+import cmp.visitor as visitor
+
+from TypeCollectorBuilder import TypeBuilder, TypeCollector
+from TypeChecker import TypeChecker
+
 from Grammar import G, tokenize_text, pprint_tokens
 from Utils import FormatVisitor
 from cmp.evaluation import evaluate_reverse_parse
@@ -27,8 +31,23 @@ def run_pipeline(G, program):
     formatter = FormatVisitor()
     tree = formatter.visit(ast)
     print(tree)
-    return ast
+    
+    errors = []
+    collector = TypeCollector(errors)
+    collector.visit(ast)
+    context = collector.context
+    print("Context\n", context)
+    print(errors)
 
+    builder = TypeBuilder(context, errors)
+    builder.visit(ast)
+    print("Context\n", context)
+    print(errors)
+
+    checker = TypeChecker(context, errors)
+    scope = checker.visit(ast)
+
+    print(errors)
 
 filename = r".\CoolPrograms\Test131.txt"
 print("Loading " + filename)
@@ -36,4 +55,4 @@ file1 = open(filename, "r")
 program = file1.read()
 file1.close()
 
-ast = run_pipeline(G,program)
+run_pipeline(G, program)
