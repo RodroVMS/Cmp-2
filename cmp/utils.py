@@ -144,7 +144,7 @@ def tokenizer(G, fixed_tokens):
     def decorate(func):
         def tokenize_text(text):
             tokens = []
-            for lex in text.split():
+            for lex in text:
                 try:
                     token = fixed_tokens[lex]
                 except KeyError:
@@ -154,15 +154,16 @@ def tokenizer(G, fixed_tokens):
                     except TypeError:
                         pass
                 tokens.append(token)
+
             tokens.append(Token('$', G.EOF))
             return tokens
 
-        if hasattr(func, '__call__'):
-            return tokenize_text
-        elif isinstance(func, str):
-            return tokenize_text(func)
-        else:
-            raise TypeError('Argument must be "str" or a callable object.')
+        #if hasattr(func, '__call__'):
+            #return tokenize_text
+        #if isinstance(func, str):
+            #return tokenize_text(func)
+        #else:
+            #raise TypeError('Argument must be "str" or a callable object.')
     return decorate
 
 class DisjointSet:

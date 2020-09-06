@@ -23,7 +23,7 @@ class TypeCollector(object):
     @visitor.when(ProgramNode)
     def visit(self, node):
         self.context = Context()
-        self.context.create_type('int')
+        self.context.create_type('Int')
         for class_def in node.declarations:
             self.visit(class_def)
     
@@ -91,7 +91,7 @@ class TypeBuilder:
     @visitor.when(FuncDeclarationNode)
     def visit(self, node):
         try:
-            ret_type = self.context.get_type(node.type) if node.type != 'void' else VoidType()
+            ret_type = self.context.get_type(node.type) if node.type != 'Void' else VoidType()
         except SemanticError as err:
             self.errors.append(err.text)
             ret_type = ErrorType()

@@ -6,10 +6,6 @@ from cmp.tools.Old.grammar import compute_firsts, compute_local_firsts
 from cmp.tools.Old.automata03 import State, multiline_formatter
 
 
-
-##firsts = compute_firsts(G)
-##firsts[G.EOF] = ContainerSet(G.EOF)
-
 def expand(item, firsts):
     next_symbol = item.NextSymbol
  
@@ -91,7 +87,6 @@ def build_LR1_automaton(G):
             
             if not goto:
                 continue
-            
             try:
                 next_state = visited[goto]
             except KeyError:

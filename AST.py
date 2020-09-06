@@ -27,14 +27,44 @@ class FuncDeclarationNode(DeclarationNode):
         self.body = body
 
 class AttrDeclarationNode(DeclarationNode):
-    def __init__(self, idx, typex):
+    def __init__(self, idx, typex, expr=None):
         self.id = idx
         self.type = typex
+        self.expr = expr
 
 class VarDeclarationNode(ExpressionNode):
     def __init__(self, idx, typex, expr):
         self.id = idx
         self.type = typex
+        self.expr = expr
+
+class BlockNode(ExpressionNode):
+    def __init__(self, body):
+        self.body = body
+
+class IfDeclarationNode(ExpressionNode):
+    def __init__(self, ifexpr, thenexpr, elseexpr):
+        self.ifexpr = ifexpr
+        self.thenexpr = thenexpr
+        self.elseexpr = elseexpr
+
+class WhileDeclarationNode(ExpressionNode):
+    def __init__(self, whileexpr, bodyexpr):
+        self.whileexpr = whileexpr
+        self.bodyexpr = bodyexpr
+
+class LetDeclarationNode(ExpressionNode):
+    def __init__(self, letvars, expr):
+        self.letvars = letvars
+        self.expr = expr
+
+class CaseDeclarationNode(ExpressionNode):
+    def __init__(self, expr, casevars):
+        self.expr = expr
+        self.casevars = casevars       
+
+class IsVoidDeclarationNode(ExpressionNode):
+    def __init__(self, expr):
         self.expr = expr
 
 class AssignNode(ExpressionNode):
@@ -59,6 +89,8 @@ class BinaryNode(ExpressionNode):
 
 class ConstantNumNode(AtomicNode):
     pass
+class ConstantStringNode(AtomicNode):
+    pass
 class VariableNode(AtomicNode):
     pass
 class InstantiateNode(AtomicNode):
@@ -70,4 +102,13 @@ class MinusNode(BinaryNode):
 class StarNode(BinaryNode):
     pass
 class DivNode(BinaryNode):
+    pass
+
+class LesserNode(BinaryNode):
+    pass
+class LesserEqualNode(BinaryNode):
+    pass
+class EqualNode(BinaryNode):
+    pass
+class NotNode(AtomicNode):
     pass

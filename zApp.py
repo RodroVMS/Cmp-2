@@ -4,7 +4,7 @@ import cmp.visitor as visitor
 from TypeCollectorBuilder import TypeBuilder, TypeCollector
 from TypeChecker import TypeChecker
 
-from Grammar import G, tokenize_text, ocur, ccur, semi
+from Grammar import G, tokenize_text, lexer, ocur, ccur, semi
 from Utils import FormatVisitor
 from cmp.evaluation import evaluate_reverse_parse
 from cmp.tools.LR1_Parser import LR1Parser
@@ -67,13 +67,13 @@ if st.button("Submit"):
     if showProgram:
         st.text(program)
     
-    tokens = tokenize_text(program)
+    tokens = lexer(program)
     if showTokens:
         st.write("Tokenizing")
         st.text(pprint_tokens(tokens))
     
     parser = LR1Parser(G)
-    parse, operations = parser([t.token_type for t in tokens])
+    parse, operations = parser(tokens)
     if showParsing:
         st.write("Parsing")
         st.text("\n".join(repr(x) for x in parse))

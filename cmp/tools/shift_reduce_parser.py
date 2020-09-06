@@ -21,9 +21,8 @@ class ShiftReduceParser:
         
         while True:
             state = stack[-1]
-            lookahead = w[cursor]
+            lookahead = w[cursor].token_type
             if self.verbose: print(stack, '<---||--->', w[cursor:])
-            
             try:
                 action, tag = self.action[state, lookahead]
                 if action == self.SHIFT:
@@ -44,7 +43,8 @@ class ShiftReduceParser:
                 else:
                     return "Error! Action Table Conflict", operations
             except KeyError:
-                return f"Error! String {w} does not match Grammars generated language.", operations
+                s = pprint_w(w[:(cursor + 1)])
+                return f"Error! String does not match Grammars generated language: \n {s}", operations
 
     @staticmethod
     def _register(table, key, value, conflict_type: dict):
@@ -69,6 +69,7 @@ def conflict_chain(p):
             s_copy = s_state.copy()
             chain += str(t)
             if (state, t) in p.conflictType:
+                print("Conflictt")
                 return chain, p.conflictType[state, t]
             try:
                 action, tag = p.action[state, t]
@@ -91,3 +92,21 @@ def conflict_chain(p):
                 q.append((new_state, s_copy, chain))
                 visited.add(new_state)
     return "", ""
+
+from Grammar import ocur, ccur, semi
+def pprint_w(tokens):
+    indent = 0
+    pending = []
+    s = ""
+    for token in tokens:
+        pending.append(token.lex)
+        if token.lex in { "{", "}", ";" }:
+            if token.lex == "}":
+                indent -= 1
+            s += ('    '*indent + ' '.join(str(t) for t in pending))
+            s += "\n"
+            pending.clear()
+            if token.lex == "{":
+                indent += 1
+    s += (' '.join([str(t) for t in pending]))
+    return s
