@@ -1,7 +1,8 @@
 from cmp.pycompiler import Grammar
 
 class Node:
-    pass
+    def __init__(self):
+        self.line = -1
 
 class ProgramNode(Node):
     def __init__(self, declarations):
@@ -61,7 +62,11 @@ class LetDeclarationNode(ExpressionNode):
 class CaseDeclarationNode(ExpressionNode):
     def __init__(self, expr, casevars):
         self.expr = expr
-        self.casevars = casevars       
+        self.casevars = casevars
+
+class CaseVarNode(VarDeclarationNode):
+    def __init__(self, idx, typex, expr):
+        VarDeclarationNode.__init__(self, idx, typex, expr)     
 
 class IsVoidDeclarationNode(ExpressionNode):
     def __init__(self, expr):
@@ -87,6 +92,13 @@ class BinaryNode(ExpressionNode):
         self.left = left
         self.right = right
 
+class OperationNode(BinaryNode):
+    pass
+class ComparisonNode(BinaryNode):
+    pass
+
+class ConstantBoolNode(AtomicNode):
+    pass
 class ConstantNumNode(AtomicNode):
     pass
 class ConstantStringNode(AtomicNode):
@@ -95,20 +107,21 @@ class VariableNode(AtomicNode):
     pass
 class InstantiateNode(AtomicNode):
     pass
-class PlusNode(BinaryNode):
+class PlusNode(OperationNode):
     pass
-class MinusNode(BinaryNode):
+class MinusNode(OperationNode):
     pass
-class StarNode(BinaryNode):
+class StarNode(OperationNode):
     pass
-class DivNode(BinaryNode):
+class DivNode(OperationNode):
     pass
-
-class LesserNode(BinaryNode):
+class LesserNode(ComparisonNode):
     pass
-class LesserEqualNode(BinaryNode):
+class LesserEqualNode(ComparisonNode):
     pass
-class EqualNode(BinaryNode):
+class EqualNode(ComparisonNode):
     pass
 class NotNode(AtomicNode):
+    pass
+class HyphenNode(AtomicNode):
     pass

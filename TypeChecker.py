@@ -1,21 +1,21 @@
 import cmp.visitor as visitor
-from AST import ProgramNode, ClassDeclarationNode, AttrDeclarationNode, FuncDeclarationNode
-from AST import VarDeclarationNode, AssignNode, CallNode, BinaryNode
-from AST import ConstantNumNode, VariableNode, InstantiateNode
+from AST import ProgramNode, ClassDeclarationNode, AttrDeclarationNode, FuncDeclarationNode, BlockNode, IfDeclarationNode
+from AST import VarDeclarationNode, AssignNode, CallNode, BinaryNode, LetDeclarationNode, CaseDeclarationNode
+from AST import ConstantNumNode, VariableNode, InstantiateNode, WhileDeclarationNode, OperationNode, ComparisonNode
+from AST import ConstantStringNode, ConstantBoolNode, NotNode, IsVoidDeclarationNode, HyphenNode, CaseVarNode
 
 from cmp.semantic import SemanticError
 from cmp.semantic import Attribute, Method, Type
-from cmp.semantic import VoidType, ErrorType, IntType
+from cmp.semantic import VoidType, ErrorType, IntType, SelfType
 from cmp.semantic import Context, Scope
 
 from TypeCollectorBuilder import TypeCollector, TypeBuilder
 
-#Find Correct Loaction For This
 WRONG_SIGNATURE = 'Method "%s" already defined in "%s" with a different signature.'
 SELF_IS_READONLY = 'Variable "self" is read-only.'
-LOCAL_ALREADY_DEFINED = 'Variable "%s" is already defined in method "%s".'
+LOCAL_ALREADY_DEFINED = 'Variable "%s" is already defined.'
 INCOMPATIBLE_TYPES = 'Cannot convert "%s" into "%s".'
-VARIABLE_NOT_DEFINED = 'Variable "%s" is not defined in "%s".'
+VARIABLE_NOT_DEFINED = 'Variable "%s" is not defined.'
 INVALID_OPERATION = 'Operation is not defined between "%s" and "%s".'
 
 class TypeChecker:
@@ -23,6 +23,7 @@ class TypeChecker:
         self.context = context
         self.current_type = None
         self.current_method = None
+        self.current_attrb = None
         self.errors = errors
 
     @visitor.on('node')
@@ -39,8 +40,8 @@ class TypeChecker:
     @visitor.when(ClassDeclarationNode)
     def visit(self, node, scope):
         self.current_type = self.context.get_type(node.id)
-        scope.define_variable('self', self.current_type)
-    
+
+        scope.define_variable('self', SelfType())
         for attr in self.current_type.attributes:
              scope.define_variable(attr.name, attr.type)
         
@@ -48,120 +49,300 @@ class TypeChecker:
             self.visit(feature, scope.create_child())
         
     @visitor.when(AttrDeclarationNode)
-    def visit(self, node, scope):
-        pass
+    def visit(self, node, scope : Scope):
+        self.current_attrb = self.current_type.get_attribute(node.id)
+        node_type = self.context.get_type(node.type) if node.type != "SELF_TYPE" else SelfType()
+        if not node.expr:
+            node.computed_type = node_type
+            self.current_attrb = None
+            return
+
+        self.visit(node.expr, scope)
+        expr_type = node.expr.computed_type
+        if not expr_type.conforms_to(node_type):
+            self.errors.append("Declaring Attribute:", INCOMPATIBLE_TYPES.replace('%s', expr_type.name, 1).replace('%s', node_type.name, 1))
+            node.computed_type = ErrorType()
+        else:
+            node.computed_type = node_type
+        var = scope.find_variable(node.id)
+        var.type = node.computed_type
+        self.current_attrb = None
     
     @visitor.when(FuncDeclarationNode)
-    def visit(self, node, scope):
+    def visit(self, node, scope : Scope):
         self.current_method = self.current_type.get_method(node.id)
         
         for idx, typex in zip(self.current_method.param_names, self.current_method.param_types):
             scope.define_variable(idx, typex)
+            
+        self.visit(node.body, scope)
+        
+        ret_type_decl = self.current_method.return_type
+        ret_type_decl = ret_type_decl if not isinstance(ret_type_decl, SelfType) else self.current_type
+        ret_type_expr = node.body.computed_type
+        ret_type_expr = ret_type_expr if not isinstance(ret_type_expr, SelfType) else self.current_type
+        if not ret_type_expr.conforms_to(ret_type_decl):
+            self.AddError("Incompatible Return Types",INCOMPATIBLE_TYPES.replace('%s', ret_type_decl.name, 1).replace('%s', ret_type_expr.name, 1))
+        
+        self.current_method = None
+    
+    @visitor.when(BlockNode)
+    def visit(self, node, scope : Scope):
         for expr in node.body:
             self.visit(expr, scope)
-        
-        ret_type_decl = self.current_method.return_type 
-        ret_type_expr = node.body[-1].computed_type
-        if not ret_type_expr.conforms_to(ret_type_decl):
-            self.errors.append(INCOMPATIBLE_TYPES.replace('%s', ret_type_decl.name, 1).replace('%s', ret_type_expr.name, 1))
+        node.computed_type = node.body[-1].computed_type
     
-    @visitor.when(VarDeclarationNode)
+    @visitor.when(IfDeclarationNode)
+    def visit(self, node : IfDeclarationNode, scope : Scope):
+        self.visit(node.ifexpr, scope)
+        ifexpr_type = node.ifexpr.computed_type
+        bool_type = self.context.get_type("Bool")
+        if not ifexpr_type.conforms_to(bool_type):
+            self.AddError("If predicate is not Bool:", INCOMPATIBLE_TYPES.replace('%s', ifexpr_type.name, 1).replace('%s', bool_type.name, 1))
+            ifexpr_type = ErrorType()
+
+        self.visit(node.thenexpr, scope)
+        then_type = node.thenexpr.computed_type
+        then_type = then_type if not isinstance(then_type, SelfType) else self.current_type
+
+        self.visit(node.elseexpr, scope)
+        else_type = node.elseexpr.computed_type 
+        else_type = else_type if not isinstance(else_type, SelfType) else self.current_type
+
+        typex = else_type.least_common_ancestor(then_type)
+        if typex == None:
+            self.AddError("The \"then\" and \"else\" expressions have different types with no common ancestor.")
+            node.computed_type = ErrorType()
+        else:
+            node.computed_type = typex
+
+    @visitor.when(WhileDeclarationNode)
+    def visit(self, node : WhileDeclarationNode, scope : Scope):
+        self.visit(node.whileexpr, scope)
+        pred_type = node.whileexpr.computed_type
+        bool_type = self.context.get_type("Bool")
+        if not pred_type.conforms_to(bool_type):
+            self.AddError("Cant Evaluate While Expression:",INCOMPATIBLE_TYPES.replace('%s', pred_type.name, 1).replace('%s', bool_type.name, 1))
+            pred_type = ErrorType()
+        
+        self.visit(node.bodyexpr, scope)
+        node.computed_type = VoidType()
+
+    @visitor.when(LetDeclarationNode)
+    def visit(self, node : LetDeclarationNode, scopex : Scope):
+        scope = scopex.create_child()
+        for var in node.letvars:
+            self.visit(var, scope)
+        self.visit(node.expr, scope)
+        node.computed_type = node.expr.computed_type
+    
+    @visitor.when(CaseDeclarationNode)
+    def visit(self, node : CaseDeclarationNode, scope : Scope):
+        self.visit(node.expr, scope)
+        case_expr_type = node.expr.computed_type if not isinstance(node.expr.computed_type, SelfType) else self.current_type
+        if isinstance(case_expr_type, VoidType):
+            self.AddError(f"Case expression evaluated void.")
+            case_expr_type = ErrorType()
+        
+        var_names = set()
+        general_type = None
+        #least_type = self.context.get_type("Object")
+        found = False
+        for var in node.casevars:
+            child = scope.create_child()
+            #child.define_variable(var.id, case_expr_type)
+            self.visit(var, child)
+            var_type = var.computed_type
+            if var_type.name in var_names:
+                self.AddError(f"Equal types of \"{var_type.name}\" detected on case expression.")
+            else: 
+                var_names.add(var.computed_type.name)
+            
+            try:
+                general_type = general_type.least_common_ancestor(var_type) if general_type else var_type
+            except SemanticError as err:
+                self.AddError(f"In Case Expression, in branch \"{var.id}:{var.type}\":",err.text)
+
+            if not found and case_expr_type.conforms_to(var.computed_type):
+                found = True
+
+        if not found:
+            self.AddError(f"No branch conforms to Case Expresion Type \"{case_expr_type.name}\"")
+            node.computed_type = ErrorType()
+        else:
+            node.computed_type = general_type
+
+    @visitor.when(CaseVarNode)
     def visit(self, node, scope):
-        if node.id == 'self':
-            self.errors.append("Identifier 'self' is already defined GLOBALLY")
         try:
-            var_type = self.context.get_type(node.type)
+            node_type = self.context.get_type(node.type)# if node.type != "SELF_TYPE" else SelfType()
         except SemanticError as err:
             self.errors.append(err.text)
-            var_type = ErrorType()
-            
+            node_type = ErrorType()
+
+        scope.define_variable(node.id, node_type)
+
         self.visit(node.expr, scope)
         expr_type = node.expr.computed_type
+        #if not expr_type.conforms_to(node_type):
+        #    self.AddError(f"Declaring Case Variable \"{node.id}\":",INCOMPATIBLE_TYPES.replace('%s', expr_type.name, 1).replace('%s', node_type.name, 1))
+        #    node_type = ErrorType()
+
+        node.computed_type = expr_type
+
+    @visitor.when(VarDeclarationNode)
+    def visit(self, node, scope):
+        try:
+            node_type = self.context.get_type(node.type)# if node.type != "SELF_TYPE" else SelfType()
+        except SemanticError as err:
+            self.errors.append(err.text)
+            node_type = ErrorType()
+
+        if scope.is_local(node.id):
+            self.AddError(f"Declaring Variable \"{node.id}\":",LOCAL_ALREADY_DEFINED.replace('%s', node.id, 1))
+        else: scope.define_variable(node.id, node_type) 
+
+        if node.expr:
+            self.visit(node.expr, scope)
+            expr_type = node.expr.computed_type
+            if not expr_type.conforms_to(node_type):
+                self.AddError(f"Declaring Variable \"{node.id}\":", INCOMPATIBLE_TYPES.replace('%s', expr_type.name, 1).replace('%s', node_type.name, 1))
+                node_type = ErrorType()
         
-        if not expr_type.conforms_to(var_type):
-            self.errors.append(INCOMPATIBLE_TYPES.replace('%s', expr_type.name, 1).replace('%s', node_type.name, 1))
-        if scope.is_defined(node.id):
-            self.errors.append(LOCAL_ALREADY_DEFINED.replace('%s', node.id, 1).replace('%s', self.current_method.name, 1))
-        else:
-            scope.define_variable(node.id, var_type)        
-        node.computed_type = var_type    
+        node.computed_type = node_type    
         
     @visitor.when(AssignNode)
     def visit(self, node, scope):
-        if scope.is_defined(node.id):
-            var = scope.find_variable(node.id)
+        var = scope.find_variable(node.id)
+        if var:
             var_type = var.type
             
             self.visit(node.expr, scope)
             expr_type = node.expr.computed_type
-            if expr_type is str:
-                print(expr_type)
             
             if var.name == 'self':
-                self.errors.append(SELF_IS_READONLY)
+                self.AddError("Cant Assign", SELF_IS_READONLY)
             elif not expr_type.conforms_to(var_type):
-                self.errors.append(INCOMPATIBLE_TYPES.replace('%s', var_type.name, 1).replace('%s', expr_type.name, 1))
+                self.AddError("Cant Assign:", INCOMPATIBLE_TYPES.replace('%s', var_type.name, 1).replace('%s', expr_type.name, 1))
         else:
-            self.errors.append(VARIABLE_NOT_DEFINED.replace('%s', node.id, 1).replace('%s', self.current_method.name, 1))
+            self.AddError("Cant Assign:",VARIABLE_NOT_DEFINED.replace('%s', node.id, 1))
             var_type = ErrorType()
         node.computed_type = var_type
     
     @visitor.when(CallNode)
     def visit(self, node, scope):
-        self.visit(node.obj, scope)
-        obj_type = node.obj.computed_type
+        if node.obj == None:
+            obj_type = self.current_type
+        elif isinstance(node.obj, tuple):
+            self.visit(node.obj[0], scope)
+            type0 = node.obj[0].computed_type
+            try:
+                obj_type = self.context.get_type(node.obj[1])
+                if not type0.conforms_to(obj_type):
+                    self.AddError(f"Class \"{type0.name}\" does not inherit from \"{obj_type.name}\".")
+                    obj_type = ErrorType()
+            except SemanticError as err:
+                self.errors.add(err)
+                obj_type = ErrorType()
+        else:
+            self.visit(node.obj, scope)
+            obj_type = node.obj.computed_type
         
         try:
             method = obj_type.get_method(node.id)
+            ret_type = method.return_type  if not isinstance(method.return_type, SelfType) else obj_type
             if len(node.args) == len(method.param_types):
                 for arg, param_type in zip(node.args, method.param_types):
                     self.visit(arg, scope)
                     arg_type = arg.computed_type
-                    if isinstance(arg_type, str):
-                        print("aaa")
-                        print(arg_type)
-                        print("bbb")
-                        
                     if not arg_type.conforms_to(param_type):
-                        self.errors.append(INCOMPATIBLE_TYPES.replace('%s', arg_type.name, 1).replace('%s', param_type.name, 1))
+                        self.AddError(f"Method \"{method.name}\" in type \"{obj_type.name}\". Argument incompatibility: " + INCOMPATIBLE_TYPES.replace('%s', arg_type.name, 1).replace('%s', param_type.name, 1))
             else:
-                 self.errors.append("Method", method.name, "only accepts",len(method.param_types),"arguments")
-            ret_type = method.return_type
+                 self.AddError(f"Method \"{method.name}\" takes \"{len(method.param_types)}\" arguments, instead {len(node.args)} were given.")
         
         except SemanticError as err:
-            self.errors.append(err.text)
+            self.AddError(err.text)
             ret_type = ErrorType()
             
         node.computed_type = ret_type
-            
     
-    @visitor.when(BinaryNode)
+    @visitor.when(OperationNode)
     def visit(self, node, scope):
         self.visit(node.left, scope)
         left_type = node.left.computed_type
         
         self.visit(node.right, scope)
         right_type = node.right.computed_type
+
+        int_type = self.context.get_type("Int")
         
-        if not (left_type.conforms_to(IntType()) and right_type.conforms_to(IntType())):
-            self.errors.append(INVALID_OPERATION.replace('%s', left_type.name, 1).replace('%s', right_type.name, 1))
+        if not (left_type.conforms_to(int_type) and right_type.conforms_to(int_type)):
+            self.AddError("Performing Arithmetic Operation:",INVALID_OPERATION.replace('%s', left_type.name, 1).replace('%s', right_type.name, 1))
             node_type = ErrorType()
         else:
-            node_type = IntType()
-        
+            node_type = int_type
         node.computed_type = node_type
-            
+    
+    @visitor.when(ComparisonNode)
+    def visit(self, node, scope):
+        self.visit(node.left, scope)
+        left_type = node.left.computed_type
+        
+        self.visit(node.right, scope)
+        right_type = node.right.computed_type
+
+        if not (left_type.conforms_to(right_type) or right_type.conforms_to(left_type)):
+            self.AddError("Performing Comparison: ", INVALID_OPERATION.replace('%s', left_type.name, 1).replace('%s', right_type.name, 1))
+            node_type = ErrorType()
+        else:
+            node_type = self.context.get_type("Bool")
+        node.computed_type = node_type
+
+    
     @visitor.when(ConstantNumNode)
     def visit(self, node, scope):
-        node.computed_type = IntType()
+        node.computed_type = self.context.get_type("Int")
+    
+    @visitor.when(ConstantStringNode)
+    def visit(self, node, scope):
+        node.computed_type = self.context.get_type("String")
+    
+    @visitor.when(ConstantBoolNode)
+    def visit(self, node, scope):
+        node.computed_type = self.context.get_type("Bool")
+    
+    @visitor.when(NotNode)
+    def visit(self, node, scope):
+        self.visit(node.lex, scope)
+        bool_type = self.context.get_type("Bool")
+        if not node.lex.computed_type.conforms_to(bool_type):
+            self.AddError("Computing Not Expression:", INCOMPATIBLE_TYPES.replace('%s', node.lex.computed_type.name, 1).replace('%s',bool_type.name, 1))
+            node.computed_type = ErrorType()
+        node.computed_type = bool_type
+    
+    @visitor.when(IsVoidDeclarationNode)
+    def visit(self, node, scope):
+        self.visit(node.lex, scope)
+        bool_type = self.context.get_type("Bool")
+        node.computed_type = bool_type
+    
+    @visitor.when(HyphenNode)
+    def visit(self, node, scope):
+        self.visit(node.lex, scope)
+        node_type = node.lex.computed_type
+        int_type = self.context.get_type("Int")
+        if not node_type.conforms_to(int_type):
+            self.AddError("Computing Hyphen Expression:",INCOMPATIBLE_TYPES.replace('%s', node.lex.computed_type.name, 1).replace('%s',int_type.name, 1))
+            node_type = ErrorType()
+        node.computed_type = node_type
 
     @visitor.when(VariableNode)
     def visit(self, node, scope):
-        if scope.is_defined(node.lex):
-            var = scope.find_variable(node.lex)
-            var_type = var.type
+        var = scope.find_variable(node.lex)
+        if var:
+            var_type = var.type if not isinstance(var.type, SelfType) else self.current_type 
         else:
-            self.errors.append(VARIABLE_NOT_DEFINED.replace('%s', node.lex, 1).replace('%s', self.current_method.name, 1))
+            self.AddError(VARIABLE_NOT_DEFINED.replace('%s', node.lex, 1))
             var_type = ErrorType()
         
         node.computed_type = var_type
@@ -169,9 +350,14 @@ class TypeChecker:
     @visitor.when(InstantiateNode)
     def visit(self, node, scope):
         try:
-            node_type = self.context.get_type(node.lex)
+            node_type = self.context.get_type(node.lex) if node.lex != "SELF_TYPE" else SelfType()
         except SemanticError as err:
-            self.errors.append(err.text)
+            self.AddError(f"Unable to instantiate:",err.text)
             node_type = ErrorType()
-            
         node.computed_type = node_type
+    
+    def AddError(self, extra = "", prefixed = ""):
+        current_type = f"In class \"{self.current_type.name}\", "
+        current_loc = f"in method \"{self.current_method.name}\". " if self.current_method else ""  
+        current_loc = f"in attribute \"{self.current_attrb.name}\". " if self.current_attrb else current_loc
+        self.errors.append(current_type + current_loc + extra + " " + prefixed)

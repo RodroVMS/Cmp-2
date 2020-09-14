@@ -40,11 +40,40 @@ class Type:
         self.attributes = []
         self.methods = []
         self.parent = None
+        self.index = -1
 
     def set_parent(self, parent):
         if self.parent is not None:
             raise SemanticError(f'Parent type is already set for {self.name}.')
+        if parent.name in {"String", "Int", "Bool"}:
+            raise SemanticError(f'{parent} type cannot be inherited.')
         self.parent = parent
+
+    def least_common_ancestor(self, other):
+        this = self
+        if isinstance(this, ErrorType) or isinstance(other, ErrorType):
+            raise SemanticError("Error Type detected while perfoming Join. Aborting.") 
+
+        while this.index < other.index:
+            other = other.parent
+        while other.index < this.index:
+            this = this.parent
+        if not (this and other):
+            return None
+        while this.name != other.name:
+            this = this.parent
+            other = other.parent
+            if this == None:
+                return None
+        return this
+    
+    def least_common_successor(self, other):
+        this = self
+        if this.conforms_to(other):
+            return this
+        if other.conforms_to(this):
+            return other
+        return self.least_common_ancestor(other)
 
     def get_attribute(self, name:str):
         try:
@@ -72,15 +101,39 @@ class Type:
             return next(method for method in self.methods if method.name == name)
         except StopIteration:
             if self.parent is None:
-                raise SemanticError(f'Method "{name}" is not defined in {self.name}.')
+                raise SemanticError(f'Method "{name}" is not defined in class {self.name}.')
             try:
                 return self.parent.get_method(name)
             except SemanticError:
-                raise SemanticError(f'Method "{name}" is not defined in {self.name}.')
+                raise SemanticError(f'Method "{name}" is not defined in class {self.name}.')
 
     def define_method(self, name:str, param_names:list, param_types:list, return_type):
         if name in (method.name for method in self.methods):
             raise SemanticError(f'Method "{name}" already defined in {self.name}')
+
+        try:
+            parent_method = self.get_method(name)
+        except SemanticError:
+            parent_method = None
+        if parent_method:
+            error_list = []
+            if not return_type.conforms_to(parent_method.return_type):
+                error_list.append(f"    -> Same return type: Redefined method has {return_type.name} as return type instead of {parent_method.return_type.name}.")
+            if len(param_types) != len(parent_method.param_types):
+                error_list.append(f"    -> Same amount of params: Redefined method has {len(param_types)} params instead of {len(parent_method.param_types)}.")
+            else:
+                count = 0
+                err = []
+                for param_type, parent_param_type in zip(param_types, parent_method.param_types):
+                    if param_type != parent_param_type:
+                        err.append(f"        -Param number {count} has {param_type.name} as type instead of {parent_param_type.name}")
+                    count += 1
+                if err:
+                    s = f"    -> Same param types:\n" + "\n".join(child for child in err)
+                    error_list.append(s)
+            if error_list:
+                 err = f"Redifined method \"{name}\" in class {self.name} does not have:\n" + "\n".join(child for child in error_list)
+                 raise SemanticError(err)
 
         method = Method(name, param_names, param_types, return_type)
         self.methods.append(method)
@@ -120,6 +173,13 @@ class Type:
     def __repr__(self):
         return str(self)
 
+class SelfType(Type):
+    def __init__(self):
+        Type.__init__(self, "SELF_TYPE")
+    
+    def conforms_to(self, other):
+        return isinstance(other, SelfType)
+
 class ErrorType(Type):
     def __init__(self):
         Type.__init__(self, '<error>')
@@ -148,7 +208,7 @@ class VoidType(Type):
 
 class IntType(Type):
     def __init__(self):
-        Type.__init__(self, 'int')
+        Type.__init__(self, 'Int')
 
     def __eq__(self, other):
         return other.name == self.name or isinstance(other, IntType)
@@ -192,7 +252,6 @@ class Scope:
 
     def create_child(self):
         child = Scope(self)
-        child.locals = self.locals.copy()
         self.children.append(child)
         return child
 
@@ -206,7 +265,7 @@ class Scope:
         try:
             return next(x for x in locals if x.name == vname)
         except StopIteration:
-            return self.parent.find_variable(vname, self.index) if self.parent is None else None
+            return self.parent.find_variable(vname, self.index) if self.parent is not None else None
 
     def is_defined(self, vname):
         return self.find_variable(vname) is not None

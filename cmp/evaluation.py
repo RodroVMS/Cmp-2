@@ -9,6 +9,9 @@ def evaluate_reverse_parse(right_parse, operations, tokens):
     right_parse = iter(right_parse)
     tokens = iter(tokens)
     stack = []
+    reformed =[]
+    line_str = ""
+    line_num = 0
     for operation in operations:
         if operation == ShiftReduceParser.SHIFT:
             token = next(tokens)
@@ -23,6 +26,7 @@ def evaluate_reverse_parse(right_parse, operations, tokens):
             if len(body):
                 synteticed = [None] + stack[-len(body):]
                 value = rule(None, synteticed)
+                #value.line = 8
                 stack[-len(body):] = [value]
             else:
                 stack.append(rule(None, None))

@@ -39,12 +39,13 @@ class ShiftReduceParser:
                     last = stack[-1]
                     stack.append(self.goto[last, tag.Left])
                 elif action == self.OK:
-                    return output, operations
+                    return output, operations, True
                 else:
-                    return "Error! Action Table Conflict", operations
+                    return "Error! Action Table Conflict", operations, False
             except KeyError:
                 s = pprint_w(w[:(cursor + 1)])
-                return f"Error! String does not match Grammars generated language: \n {s}", operations
+                #print("Lookahead", lookahead)
+                return f"Error! String does not match Grammars generated language: \n {s}", operations, False
 
     @staticmethod
     def _register(table, key, value, conflict_type: dict):

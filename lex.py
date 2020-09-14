@@ -13,38 +13,10 @@ symbols = r",|;|:|\{|\}|\(|\)|<-|=>|\.|=|\+|-|\*|/|<|>|@"
 
 
 
-#regex = re.compile(keywords + nums + string + idex +  symbols,re.DOTALL)
+#print(text)
 
-
-filename = r".\CoolPrograms\7u.txt"
-#filename = r".\CoolPrograms\0Simple.txt"
-print("Loading " + filename)
-file1 = open(filename, "r")
-program = file1.read()
-file1.close()
-
-regex = re.compile(comments, re.DOTALL)
-program = regex.sub("",program)
-
-print(program)
-
-program = re.compile(r"\\\\").sub("§bb§", program)
-program = re.compile(r"\\\"").sub("§bc§", program)
-
-print(program)
-
-program = re.compile("§bb§").sub(r"\\\\", program)
-program = re.compile("§bc§").sub(r"\"", program)
-
-print(program)
-regex = re.compile(keywords + nums + string + idex +  symbols,re.DOTALL)
-#regex = re.compile(string, re.DOTALL)
-
-text = regex.findall(program)
-print(text)
-
-print("   FT\n".join(child for child in text))
-print("cantidad de tokens", len(text))
+#print("   FT\n".join(child for child in text))
+#print("cantidad de tokens", len(text))
 
 #s = ""
 #for i in tokens:

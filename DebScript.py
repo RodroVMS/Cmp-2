@@ -6,7 +6,6 @@ from TypeCollectorBuilder import TypeBuilder, TypeCollector
 from TypeChecker import TypeChecker
 
 from Grammar import G, pprint_tokens,  lexer
-from lex import regex
 from Utils import FormatVisitor
 from cmp.evaluation import evaluate_reverse_parse
 from cmp.tools.LR1_Parser import LR1Parser
@@ -19,43 +18,52 @@ from cmp.tools.LR1_Parser import LR1Parser
 
 def run_pipeline(G, program):
     print("Executing Program")
-    print(program)
+    #print(program)
     
     #toks = regex.findall(program)
 
     tokens = lexer(program)
     #tokens = tokenize_text(toks)
-    #pprint_tokens(tokens)
+    print("Tokens")
+    pprint_tokens(tokens)
     
     parser = LR1Parser(G)
     #parse, operations = parser([t.token_type for t in tokens])
-    parse, operations = parser(tokens)
+    parse, operations, result = parser(tokens)
     #print("\n".join(repr(x) for x in parse))
     print(parse)
+
+    if not result:
+        return
 
     ast = evaluate_reverse_parse(parse, operations, tokens)
     formatter = FormatVisitor()
     tree = formatter.visit(ast)
     print(tree)
     
-    #errors = []
-    #collector = TypeCollector(errors)
-    #collector.visit(ast)
-    #context = collector.context
-    #print("Context\n", context)
-    #print(errors)
+    errors = []
+    errors.append("TypeCollector Errors:")
+    collector = TypeCollector(errors)
+    collector.visit(ast)
+    context = collector.context
+    print("Context\n", context)
+    
 
-    #builder = TypeBuilder(context, errors)
-    #builder.visit(ast)
-    #print("Context\n", context)
-    #print(errors)
+    errors.append("TypeBuilder Errors:")
+    builder = TypeBuilder(context, errors)
+    builder.visit(ast)
+    print("Context\n", context)
+    
+    
+    errors.append("TypeChecker Errors:")
+    checker = TypeChecker(context, errors)
+    scope = checker.visit(ast)
 
-    #checker = TypeChecker(context, errors)
-    #scope = checker.visit(ast)
+    for err in errors:
+        print(err)
+    print(len(errors) - 3)
 
-    #print(errors)
-
-filename = r".\CoolPrograms\7.txt"
+filename = r".\CoolPrograms\life.cl"
 #filename = r".\CoolPrograms\0Simple.txt"
 print("Loading " + filename)
 file1 = open(filename, "r")

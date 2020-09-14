@@ -4,7 +4,7 @@ import cmp.visitor as visitor
 from TypeCollectorBuilder import TypeBuilder, TypeCollector
 from TypeChecker import TypeChecker
 
-from Grammar import G, tokenize_text, lexer, ocur, ccur, semi
+from Grammar import G, lexer, ocur, ccur, semi
 from Utils import FormatVisitor
 from cmp.evaluation import evaluate_reverse_parse
 from cmp.tools.LR1_Parser import LR1Parser
@@ -64,55 +64,62 @@ else:
 ###---------------RUN PIPELINE-----------------###
 if st.button("Submit"):
     st.write("Executing Program", local_name)
-    if showProgram:
-        st.text(program)
     
-    tokens = lexer(program)
-    if showTokens:
-        st.write("Tokenizing")
-        st.text(pprint_tokens(tokens))
+    def run_pipeline(program):
+        if showProgram:
+            st.text(program)
     
-    parser = LR1Parser(G)
-    parse, operations = parser(tokens)
-    if showParsing:
-        st.write("Parsing")
-        st.text("\n".join(repr(x) for x in parse))
+        tokens = lexer(program)
+        if showTokens:
+            st.write("Tokenizing")
+            st.text(pprint_tokens(tokens))
 
-    ast = evaluate_reverse_parse(parse, operations, tokens)
-    formatter = FormatVisitor()
-    tree = formatter.visit(ast)
-    if showAST:
-        st.write("Building AST")
-        st.text(tree)
+        parser = LR1Parser(G)
+        parse, operations, success = parser(tokens)
+        if showParsing:
+            st.write("Parsing")
+            st.text("\n".join(repr(x) for x in parse))
+        if not success:
+            st.text(parse)
+            return
+
+        ast = evaluate_reverse_parse(parse, operations, tokens)
+        formatter = FormatVisitor()
+        tree = formatter.visit(ast)
+        if showAST:
+            st.write("Building AST")
+            st.text(tree)
+
+        errors = []
+        collector = TypeCollector(errors)
+        collector.visit(ast)
+        context = collector.context
+        if errors == []:
+            st.success("Collecting Types")
+        else: 
+            st.error("Collecting Types")
+        if showTypesCollected:
+            st.text("Context:")
+            st.text(context)
+
+        builder = TypeBuilder(context, errors)
+        builder.visit(ast)
+        if errors == []:
+            st.success("Building Types")
+        else:
+            st.error("Building Types")
+        if showTypesBuilded:
+            st.text("Context")
+            st.text(context)
+
+        checker = TypeChecker(context, errors)
+        scope = checker.visit(ast)
+        if errors == []:
+            st.success("Checking Types")
+        else:
+            st.error("Checking Types")
+
+        st.text("Errors")
+        st.text(errors)
     
-    errors = []
-    collector = TypeCollector(errors)
-    collector.visit(ast)
-    context = collector.context
-    if errors == []:
-        st.success("Collecting Types")
-    else: 
-        st.error("Collecting Types")
-    if showTypesCollected:
-        st.text("Context:")
-        st.text(context)
-    
-    builder = TypeBuilder(context, errors)
-    builder.visit(ast)
-    if errors == []:
-        st.success("Building Types")
-    else:
-        st.error("Building Types")
-    if showTypesBuilded:
-        st.text("Context")
-        st.text(context)
-    
-    checker = TypeChecker(context, errors)
-    scope = checker.visit(ast)
-    if errors == []:
-        st.success("Checking Types")
-    else:
-        st.error("Checking Types")
-    
-    st.text("Errors")
-    st.text(errors)
+    run_pipeline(program)
